@@ -7,6 +7,11 @@ import { io } from "socket.io-client";
 import UserContext from "./Context/UserContext";
 import { useContext } from "react";
 
+const SOCKET_SERVER_URL = `http://localhost:8080`;
+const socket = io(SOCKET_SERVER_URL, {
+    autoConnect: false
+});
+
 function OnlineGame() {
     const { user, setUser } = useContext(UserContext);
     const [game, setGame] = useState(new Chess());
@@ -14,10 +19,16 @@ function OnlineGame() {
     const [RoomName, setRoomName] = useState('');
     // const [turn, setTurn] = useState(0);
 
-    const SOCKET_SERVER_URL = `http://localhost:8080`;
-    const socket = io(SOCKET_SERVER_URL, {
-        query: { username: user }
-    });
+    useEffect(() => {
+        if (!user || socket.connected) return;
+
+        socket.io.opts.query = { username: user };
+        socket.connect();
+
+        return () => {
+            socket.disconnect();
+        };
+    }, []);
 
     useEffect(() => {
         socket.on('room-name', ({ roomName, white, black }) => {
@@ -44,7 +55,8 @@ function OnlineGame() {
                     fen: game.fen(),
                     roomName: RoomName,
                     playedBy: user,
-                    color: color
+                    color: color,
+                    move: game.history()
                 });
 
                 setGame(new Chess(game.fen()));
@@ -67,7 +79,9 @@ function OnlineGame() {
             <div className='w-[50%]'>
                 <Chessboard id="defaultBoard"
                     position={game.fen()}
-                    onPieceDrop={onDrop} />
+                    onPieceDrop={onDrop}
+                    boardOrientation={color === "white" ? "white" : "black"}
+                />
             </div>
         </div>
     )

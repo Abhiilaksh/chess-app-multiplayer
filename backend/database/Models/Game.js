@@ -16,7 +16,7 @@ const GameSchema = new mongoose.Schema({
     result: {
         type: String
     },
-    movies: [String],
+    moves: [Object],
     roomName: {
         type: String
     }

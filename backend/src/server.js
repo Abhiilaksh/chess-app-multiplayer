@@ -35,13 +35,13 @@ let availablePlayer = null;
 
 io.on('connection', async (socket) => {
     console.log("User Joined");
-    console.log("new connection event has fired");
+    console.log("new connection event has fired", socket.id);
 
     const userName = socket.handshake.query.username;
     const user = await User.findOne({ name: userName });
 
     if (user) {
-        user.currentSocket = socket?.id || '';
+        user.currentSocket = socket?.id;
     }
 
     await user?.save();
@@ -69,19 +69,27 @@ io.on('connection', async (socket) => {
 
 
     } else if (!availablePlayer) {
-        availablePlayer = user.name;
+        availablePlayer = user?.name;
         console.log("Avail player is set", availablePlayer);
     }
 
 
-    socket.on('move-played', ({ fen, roomName, playedBy, color }) => {
+    socket.on('move-played', async ({ fen, roomName, playedBy, color, move }) => {
         console.log("New Move : to room ", roomName);
         socket.to(roomName).emit('move-update', { fen });
+        const game = await Game.findOne({ roomName: roomName });
+        if (game) {
+            game.fen.push(fen);
+            game.moves.push({ move, color });
+            await game.save();
+        }
     });
 
 
     socket.on('disconnect', () => {
-        user.currentSocket = null;
+        if (user) {
+            user.currentSocket = socket?.id || '';
+        }
         console.log('client has left');
     })
 })
