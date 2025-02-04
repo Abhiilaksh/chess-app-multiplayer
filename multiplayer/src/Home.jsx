@@ -1,7 +1,11 @@
 import { useNavigate } from "react-router-dom";
+import { useContext } from "react";
+import UserContext from "./Context/UserContext";
 
 function Home() {
     const navigate = useNavigate();
+    const { user } = useContext(UserContext);
+    console.log(user);
     return (
         <div className="flex flex-row justify-center mt-10 gap-4">
             <button onClick={() => navigate("/localgamePage")} className="p-2 bg-black text-white rounded-md">Play Local</button>

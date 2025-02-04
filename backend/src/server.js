@@ -35,38 +35,49 @@ let availablePlayer = null;
 
 io.on('connection', async (socket) => {
     console.log("User Joined");
+    console.log("new connection event has fired");
+
     const userName = socket.handshake.query.username;
     const user = await User.findOne({ name: userName });
 
-    console.log(user);
-    console.log(socket.id);
+    if (user) {
+        user.currentSocket = socket?.id || '';
+    }
 
-    user.currentSocket = socket.id;
-    await user.save();
-    if (availablePlayer) {
+    await user?.save();
+    if (availablePlayer && availablePlayer != userName) {
+        console.log(`You (${userName}) is connected to ${availablePlayer}`);
         const Player1 = await User.findOne({ name: availablePlayer });
+        availablePlayer = null;
         const Player2 = await User.findOne({ name: userName });
         const roomName = uuidv4();
         const game = new Game({
-            white: Player1._id,
-            black: Player2._id,
+            white: Player1?.name,
+            black: Player2?.name,
             roomName: roomName
         })
         await game.save();
         socket.join(roomName);
-        io.sockets.sockets.get(Player1.currentSocket)?.join(roomName); // if refreshed earlier 
+        io.sockets.sockets.get(Player1?.currentSocket)?.join(roomName);
 
         console.log("room created", roomName);
         io.to(roomName).emit('room-name', {
-            roomName
+            roomName,
+            white: game?.white,
+            black: game?.black
         })
 
-        availablePlayer = null;
 
     } else if (!availablePlayer) {
         availablePlayer = user.name;
-        console.log("Avail player", availablePlayer);
+        console.log("Avail player is set", availablePlayer);
     }
+
+
+    socket.on('move-played', ({ fen, roomName, playedBy, color }) => {
+        console.log("New Move : to room ", roomName);
+        socket.to(roomName).emit('move-update', { fen });
+    });
 
 
     socket.on('disconnect', () => {

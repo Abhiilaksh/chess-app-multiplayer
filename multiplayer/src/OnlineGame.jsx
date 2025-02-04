@@ -9,11 +9,9 @@ import { useContext } from "react";
 
 function OnlineGame() {
     const { user, setUser } = useContext(UserContext);
-    console.log(user);
-    const [game, setGame] = useState(() => {
-        if (sessionStorage.getItem("game")) return new Chess(sessionStorage.getItem("game"));
-        return new Chess();
-    });
+    const [game, setGame] = useState(new Chess());
+    const [color, setColor] = useState('');
+    const [RoomName, setRoomName] = useState('');
     // const [turn, setTurn] = useState(0);
 
     const SOCKET_SERVER_URL = `http://localhost:8080`;
@@ -22,27 +20,45 @@ function OnlineGame() {
     });
 
     useEffect(() => {
-        socket.on('room-name', ({ roomName }) => {
+        socket.on('room-name', ({ roomName, white, black }) => {
             console.log('Room name received:', roomName);
+            console.log('white', white, 'black', black);
+            setRoomName(roomName);
+            if (white === user) {
+                setColor('white');
+            } else setColor('black');
+        });
+
+        socket.on('move-update', ({ fen }) => {
+            setGame(new Chess(fen));
         });
     }, [])
 
 
     const onDrop = async (sourceSquare, targetSquare) => {
-        const move = game.move({ from: sourceSquare, to: targetSquare });
+        if ((color === 'white' && game.turn() === 'w') || (color === 'black' && game.turn() === 'b')) {
+            const move = game.move({ from: sourceSquare, to: targetSquare });
 
-        if (move) {
-            setGame(new Chess(game.fen()));
-            if (game.isCheckmate()) {
-                const winner = move.color === "w" ? "White" : "Black";
-                toast.success(`${winner} wins by checkmate!`);
-            } else if (game.isStalemate()) {
-                toast.error("It's a stalemate! Game Over.");
-            } else if (game.isDraw()) {
-                toast.error("It's a draw! Game Over.");
+            if (move) {
+                socket.emit('move-played', {
+                    fen: game.fen(),
+                    roomName: RoomName,
+                    playedBy: user,
+                    color: color
+                });
+
+                setGame(new Chess(game.fen()));
+                if (game.isCheckmate()) {
+                    const winner = move.color === "w" ? "White" : "Black";
+                    toast.success(`${winner} wins by checkmate!`);
+                } else if (game.isStalemate()) {
+                    toast.error("It's a stalemate! Game Over.");
+                } else if (game.isDraw()) {
+                    toast.error("It's a draw! Game Over.");
+                }
+
+                sessionStorage.setItem("game", game.fen());
             }
-
-            sessionStorage.setItem("game", game.fen());
         }
     };
 

@@ -9,7 +9,7 @@ const GameSchema = new mongoose.Schema({
     white: {
         type: String
     },
-    Black: {
+    black: {
         type: String
     },
     fen: [String],
