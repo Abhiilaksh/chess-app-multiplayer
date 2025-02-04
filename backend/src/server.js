@@ -85,6 +85,23 @@ io.on('connection', async (socket) => {
         }
     });
 
+    socket.on('game-over', async ({ roomName, result }) => {
+        const game = await Game.findOne({ roomName: roomName });
+        game.result = result;
+        await game.save();
+        io.to(roomName).emit('game-end', {
+            result: result
+        })
+    });
+
+    socket.on('resign', async ({ roomName, user, color }) => {
+        const game = await Game.findOne({ roomName: roomName });
+        game.result = `${color} resigned`;
+        io.to(roomName).emit('game-end', {
+            result: `${color} resigned !`
+        })
+    })
+
 
     socket.on('disconnect', () => {
         if (user) {

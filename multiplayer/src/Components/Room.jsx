@@ -11,7 +11,7 @@ function Room() {
 
     return (
         <div>
-            <button onClick={createRoom}>Create Room</button>
+            <button onClick={createRoom}>Play</button>
         </div>
     )
 }

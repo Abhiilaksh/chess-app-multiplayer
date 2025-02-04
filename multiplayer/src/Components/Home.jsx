@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useContext } from "react";
-import UserContext from "./Context/UserContext";
+import UserContext from "../Context/UserContext";
 
 function Home() {
     const navigate = useNavigate();
