@@ -51,6 +51,9 @@ const UserSchema = new mongoose.Schema({
         type: Number,
         default: 400
     },
+    currentSocket: {
+        type: String
+    }
 })
 
 UserSchema.pre('save', async function (next) {

@@ -4,19 +4,28 @@ import { Chessboard } from "react-chessboard";
 import { useParams } from "react-router-dom";
 import toast from 'react-hot-toast';
 import { io } from "socket.io-client";
+import UserContext from "./Context/UserContext";
+import { useContext } from "react";
 
-
-function OnlineGame({ user }) {
+function OnlineGame() {
+    const { user, setUser } = useContext(UserContext);
+    console.log(user);
     const [game, setGame] = useState(() => {
         if (sessionStorage.getItem("game")) return new Chess(sessionStorage.getItem("game"));
         return new Chess();
     });
     // const [turn, setTurn] = useState(0);
-    const params = useParams();
-    console.log(params.id);
 
     const SOCKET_SERVER_URL = `http://localhost:8080`;
-    const socket = io(SOCKET_SERVER_URL);
+    const socket = io(SOCKET_SERVER_URL, {
+        query: { username: user }
+    });
+
+    useEffect(() => {
+        socket.on('room-name', ({ roomName }) => {
+            console.log('Room name received:', roomName);
+        });
+    }, [])
 
 
     const onDrop = async (sourceSquare, targetSquare) => {
@@ -36,13 +45,6 @@ function OnlineGame({ user }) {
             sessionStorage.setItem("game", game.fen());
         }
     };
-
-
-    async function joinGame() {
-        const response = await axios.post(`http://locallhost:8080/joinGame`, {
-            playerName: user,
-        })
-    }
 
     return (
         <div>

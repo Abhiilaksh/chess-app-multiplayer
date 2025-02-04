@@ -12,10 +12,12 @@ const GameSchema = new mongoose.Schema({
     Black: {
         type: String
     },
-    fen: {
+    fen: [String],
+    result: {
         type: String
     },
-    result: {
+    movies: [String],
+    roomName: {
         type: String
     }
 })
