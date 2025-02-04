@@ -30,7 +30,7 @@ const io = socketio(server, {
 });
 
 
-let availablePlayer = null;
+let waitingPlayers = [];
 
 
 io.on('connection', async (socket) => {
@@ -43,12 +43,16 @@ io.on('connection', async (socket) => {
     if (user) {
         user.currentSocket = socket?.id;
     }
-
     await user?.save();
-    if (availablePlayer && availablePlayer != userName) {
-        console.log(`You (${userName}) is connected to ${availablePlayer}`);
-        const Player1 = await User.findOne({ name: availablePlayer });
-        availablePlayer = null;
+
+    if (waitingPlayers.includes(user?.name)) {
+        console.log(`User ${user.name} is already in queue`);
+    }
+
+    else if (waitingPlayers.length > 0) {
+        const waitingplayer = waitingPlayers.shift();
+        console.log(`You (${userName}) is connected to ${waitingplayer}`);
+        const Player1 = await User.findOne({ name: waitingplayer });
         const Player2 = await User.findOne({ name: userName });
         const roomName = uuidv4();
         const game = new Game({
@@ -68,9 +72,11 @@ io.on('connection', async (socket) => {
         })
 
 
-    } else if (!availablePlayer) {
-        availablePlayer = user?.name;
-        console.log("Avail player is set", availablePlayer);
+    } else {
+        if (!waitingPlayers.includes(user?.name)) {
+            console.log(`you ${user?.name} is added to waiting list`);
+            waitingPlayers.push(user?.name);
+        }
     }
 
 
@@ -100,6 +106,13 @@ io.on('connection', async (socket) => {
         io.to(roomName).emit('game-end', {
             result: `${color} resigned !`
         })
+    })
+
+    socket.on('stop-searching', ({ userName }) => {
+        const index = waitingPlayers.indexOf(userName);
+        if (index !== -1) {
+            waitingPlayers.splice(index, 1);
+        }
     })
 
 
@@ -170,6 +183,10 @@ app.post('/verifytokenAndGetUsername', async (req, res) => {
         res.status(400).send({ error: 'Invalid or expired token' });
     }
 });
+
+app.get('/checkWaitingQueue', async (req, res) => {
+    res.status(200).send(waitingPlayers);
+})
 
 
 
