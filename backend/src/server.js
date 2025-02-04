@@ -38,6 +38,19 @@ io.on('connection', async (socket) => {
     console.log("new connection event has fired", socket.id);
 
     const userName = socket.handshake.query.username;
+    const connectedToRoom = socket.handshake.query.connectedToRoom;
+    console.log(connectedToRoom, "connected to room");
+    if (connectedToRoom) {
+        socket.join(connectedToRoom);
+        const game = await Game.findOne({ roomName: connectedToRoom });
+        console.log(`Player as ${userName} Joined ${connectedToRoom} , white is ${game?.white} and black is ${game?.black}`);
+        socket.emit('room-name', {
+            roomName: connectedToRoom,
+            white: game?.white,
+            black: game?.black
+        })
+    }
+
     const user = await User.findOne({ name: userName });
 
     if (user) {
@@ -45,11 +58,11 @@ io.on('connection', async (socket) => {
     }
     await user?.save();
 
-    if (waitingPlayers.includes(user?.name)) {
+    if (!connectedToRoom && waitingPlayers.includes(user?.name)) {
         console.log(`User ${user.name} is already in queue`);
     }
 
-    else if (waitingPlayers.length > 0) {
+    else if (!connectedToRoom && waitingPlayers.length > 0) {
         const waitingplayer = waitingPlayers.shift();
         console.log(`You (${userName}) is connected to ${waitingplayer}`);
         const Player1 = await User.findOne({ name: waitingplayer });
@@ -73,7 +86,7 @@ io.on('connection', async (socket) => {
 
 
     } else {
-        if (!waitingPlayers.includes(user?.name)) {
+        if (!connectedToRoom && !waitingPlayers.includes(user?.name)) {
             console.log(`you ${user?.name} is added to waiting list`);
             waitingPlayers.push(user?.name);
         }

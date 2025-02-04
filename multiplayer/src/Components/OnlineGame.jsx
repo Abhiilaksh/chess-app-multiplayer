@@ -14,18 +14,31 @@ const socket = io(SOCKET_SERVER_URL, {
 
 function OnlineGame() {
     const { user, setUser } = useContext(UserContext);
-    const [game, setGame] = useState(new Chess());
+    const [game, setGame] = useState(() => {
+        const fen = sessionStorage.getItem('online-game');
+        if (fen) return new Chess(fen);
+        return new Chess();
+    });
     const [color, setColor] = useState('');
-    const [RoomName, setRoomName] = useState('');
+    const [RoomName, setRoomName] = useState(() => {
+        const room = sessionStorage.getItem('roomName');
+        if (room) return room;
+        return '';
+    });
     // const [turn, setTurn] = useState(0);
     const [whitePlayer, setWhitePlayer] = useState('');
     const [blackPlayer, setBlackPlayer] = useState('');
     const navigate = useNavigate();
 
     useEffect(() => {
+
+        console.log("Socket connected:", socket.connected);
+        console.log("RoomName:", RoomName);
+        console.log("User:", user);
+
         if (!user || socket.connected) return;
 
-        socket.io.opts.query = { username: user };
+        socket.io.opts.query = { username: user, connectedToRoom: RoomName };
         socket.connect();
 
         return () => {
@@ -33,13 +46,11 @@ function OnlineGame() {
         };
     }, []);
 
-    useEffect(() => {
-        window.addEventListener('unload', RefreshOrTabClosed);
-    }, [])
 
     useEffect(() => {
         socket.on('room-name', ({ roomName, white, black }) => {
             console.log('Room name received:', roomName);
+            sessionStorage.setItem('roomName', roomName);
             console.log('white', white, 'black', black);
             setRoomName(roomName);
             if (white === user) {
@@ -52,10 +63,14 @@ function OnlineGame() {
 
         socket.on('move-update', ({ fen }) => {
             setGame(new Chess(fen));
+            sessionStorage.setItem('online-game', fen);
         });
 
         socket.on('game-end', ({ result }) => {
             toast.success(result);
+            sessionStorage.removeItem('roomName');
+            sessionStorage.removeItem('online-game');
+            navigate('/home');
         })
     }, [])
 
@@ -74,13 +89,18 @@ function OnlineGame() {
                 });
 
                 setGame(new Chess(game.fen()));
+                const fen = game.fen();
+                sessionStorage.setItem('online-game', fen);
                 if (game.isCheckmate()) {
                     const winner = move.color === "w" ? "White" : "Black";
                     socket.emit('game-over', { roomName: RoomName, result: `${winner} wins by checkmate` });
+                    navigate('/home');
                 } else if (game.isStalemate()) {
                     socket.emit('game-over', { roomName: RoomName, result: `stalemate` });
+                    navigate('/home');
                 } else if (game.isDraw()) {
                     socket.emit('game-over', { roomName: RoomName, result: `draw` });
+                    navigate('/home');
                 }
 
                 sessionStorage.setItem("game", game.fen());
@@ -91,6 +111,7 @@ function OnlineGame() {
 
     function resign() {
         socket.emit('resign', { roomName: RoomName, user: user, color: color });
+        navigate('/home');
     }
 
     function stopSearchingForThisUser() {
@@ -100,23 +121,6 @@ function OnlineGame() {
     function stopSearchingBtnClicked() {
         stopSearchingForThisUser();
         navigate("/home");
-    }
-
-    function RefreshOrTabClosed(e) {
-        if (!RoomName) {
-            stopSearchingForThisUser();
-
-            // prob if tab closed fine 
-            // if refresh removed from queue but shows waiting page
-            // on again refresh due to useEffect it is added to queue
-            // prob user was waiting but for him no progress 
-        }
-
-        if (RoomName) {
-            // not in queue so no prob for server part
-            // ask for resign for refresh , if tab is closed just let time run out 
-            // currently useEffect is working which accepts a current match or create one 
-        }
     }
 
     return (
