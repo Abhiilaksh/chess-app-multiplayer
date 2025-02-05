@@ -32,7 +32,10 @@ function LocalGame() {
 
 
     const onDrop = async (sourceSquare, targetSquare) => {
-        const move = game.move({ from: sourceSquare, to: targetSquare });
+        const move = game.move({
+            from: sourceSquare, to: targetSquare,
+            promotion: game.get(sourceSquare)?.type === 'p' && (targetSquare[1] === '8' || targetSquare[1] === '1') ? 'q' : undefined
+        });
 
         if (move) {
             setGame(new Chess(game.fen()));

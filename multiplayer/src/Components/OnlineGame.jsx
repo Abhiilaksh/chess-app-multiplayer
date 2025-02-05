@@ -77,7 +77,10 @@ function OnlineGame() {
 
     const onDrop = async (sourceSquare, targetSquare) => {
         if ((color === 'white' && game.turn() === 'w') || (color === 'black' && game.turn() === 'b')) {
-            const move = game.move({ from: sourceSquare, to: targetSquare });
+            const move = game.move({
+                from: sourceSquare, to: targetSquare,
+                promotion: game.get(sourceSquare)?.type === 'p' && (targetSquare[1] === '8' || targetSquare[1] === '1') ? 'q' : undefined
+            });
 
             if (move) {
                 socket.emit('move-played', {
