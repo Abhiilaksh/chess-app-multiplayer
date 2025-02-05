@@ -1,5 +1,4 @@
 import OnlineGame from './OnlineGame';
-import Room from './Room';
 import LocalGame from "./localGame";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from 'react-hot-toast';
@@ -19,7 +18,6 @@ function App() {
           <Route path="/localgame" element={<LocalGame />}></Route>
           <Route path="/game" element={<OnlineGame />}></Route>
           <Route path="/localgamePage" element={<LocalGamePage />}></Route>
-          <Route path="/room" element={<Room />}></Route>
         </Routes>
       </BrowserRouter>
     </div>

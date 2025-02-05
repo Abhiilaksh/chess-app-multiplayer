@@ -13,10 +13,18 @@ function Home() {
         setUser("");
         navigate("/");
     }
+
+    function goToGamePage() {
+        sessionStorage.clear("game")
+        sessionStorage.clear("online-game");
+        navigate(`/game`);
+    }
+
+
     return (
         <div className="flex flex-row justify-center mt-10 gap-4">
             <button onClick={() => navigate("/localgamePage")} className="p-2 bg-black text-white rounded-md">Play Local</button>
-            <button onClick={() => navigate("/room")} className="p-2 bg-[#e4e3e3] text-black rounded-md">Play Online</button>
+            <button onClick={goToGamePage} className="p-2 bg-[#e4e3e3] text-black rounded-md">Play Online</button>
 
             <div className="absolute right-3 top-3 "><button onClick={logout}>Logout</button></div>
         </div>

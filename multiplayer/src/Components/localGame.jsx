@@ -97,11 +97,13 @@ function LocalGame() {
                     <div className="w-60 bg-[#E4E3E3] rounded-md max-h-40 p-4 gap-2 flex-col overflow-y-auto">
                         {renderMovesHistory}
                     </div>
-                    <div className="w-[40%]">
+                    <div>
                         <Chessboard id="defaultBoard"
                             position={game.fen()}
                             onPieceDrop={onDrop}
                             boardOrientation={player}
+                            autoPromoteToQueen={true}
+                            boardWidth={500}
                         />
                     </div>
 

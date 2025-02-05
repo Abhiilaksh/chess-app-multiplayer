@@ -5,6 +5,7 @@ const cors = require('cors');
 require('../database/mongoose');
 const User = require('../database/Models/User');
 const Game = require('../database/Models/Game');
+const Message = require('../database/Models/Message');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
@@ -128,6 +129,17 @@ io.on('connection', async (socket) => {
         }
     })
 
+    socket.on('send-message', async ({ message, user, roomName }) => {
+        const msg = new Message({
+            text: message,
+            roomName,
+            user,
+        })
+        await msg.save();
+
+        io.to(roomName).emit('new-message', msg);
+    });
+
 
     socket.on('disconnect', () => {
         if (user) {
@@ -199,6 +211,12 @@ app.post('/verifytokenAndGetUsername', async (req, res) => {
 
 app.get('/checkWaitingQueue', async (req, res) => {
     res.status(200).send(waitingPlayers);
+})
+
+app.post('/RoomMessages', async (req, res) => {
+    const { roomName } = req.body;
+    const messages = await Message.find({ roomName: roomName }).sort({ timestamp: 1 });
+    res.status(200).send(messages);
 })
 
 
