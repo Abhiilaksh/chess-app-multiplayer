@@ -16,7 +16,7 @@ const socket = io(SOCKET_SERVER_URL, {
 });
 
 function OnlineGame() {
-    const { user, setUser } = useContext(UserContext);
+    const { user, setUser, loading } = useContext(UserContext);
     const [game, setGame] = useState(() => {
         const fen = sessionStorage.getItem('online-game');
         if (fen) return new Chess(fen);

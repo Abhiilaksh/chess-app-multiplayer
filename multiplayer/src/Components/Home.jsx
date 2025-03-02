@@ -8,7 +8,7 @@ function Home() {
     console.log("Home", user);
 
     function logout() {
-        localStorage.removeItem("user");
+        //localStorage.removeItem("user");
         localStorage.removeItem("token");
         setUser("");
         navigate("/");

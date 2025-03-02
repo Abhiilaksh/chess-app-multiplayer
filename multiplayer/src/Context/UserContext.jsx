@@ -4,9 +4,7 @@ import axios from "axios";
 const UserContext = createContext();
 
 function Provider({ children }) {
-    const [user, setUser] = useState(() => {
-        return localStorage.getItem('user') || null;
-    });
+    const [user, setUser] = useState(null);
 
     const [loading, setloading] = useState(true);
 
@@ -18,7 +16,7 @@ function Provider({ children }) {
             });
             if (response.status === 200) setUser(response.data.user);
         } catch (e) {
-            console.log(e)
+            console.log(e);
         }
         setloading(false);
     }
@@ -27,11 +25,6 @@ function Provider({ children }) {
         decodeToken();
     }, [])
 
-    useEffect(() => {
-        if (user) {
-            localStorage.setItem('user', user);
-        }
-    }, [user]);
 
     return (
         <UserContext.Provider value={{ user, setUser, loading }}>
