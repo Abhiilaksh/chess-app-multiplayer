@@ -19,6 +19,7 @@ function Login() {
 
     async function handleLogin() {
         try {
+            console.log("Entered user upper", EnteredUser);
             setLoginLoader(true);
             const response = await axios.post(`http://localhost:8080/login`, {
                 name: EnteredUser,
@@ -28,10 +29,11 @@ function Login() {
 
             if (response.status === 200) {
                 const token = response.data.token;
-                const EnteredUser = response.data.user;
+                // const EnteredUser = response.data.user;
                 localStorage.setItem('token', token);
                 sessionStorage.setItem('user', EnteredUser);
                 setUser(EnteredUser);
+                console.log("Entered user", EnteredUser);
                 navigate('/home');
             }
         } catch (error) {

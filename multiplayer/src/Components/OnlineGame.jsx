@@ -36,8 +36,15 @@ function OnlineGame() {
     const [messages, setMessages] = useState([]);
     const [movesHistory, setMovesHistory] = useState([]);
     const [quote, setQuote] = useState("");
+    const [boardWidth, setBoardWidth] = useState(window.innerWidth * 0.4);
 
+    useEffect(() => {
+        const handleResize = () => {
+            setBoardWidth(window.innerWidth * 0.4);
+        };
 
+        window.addEventListener("resize", handleResize);
+    }, []);
 
     useEffect(() => {
 
@@ -211,15 +218,22 @@ function OnlineGame() {
                         ></input>
                     </div>
                     <div className="flex justify-center flex-col items-center mt-10">
-                        <div>White : {whitePlayer} Black : {blackPlayer} </div>
+                        <div className="flex flex-row justify-between w-full">
+                            <div>{user === whitePlayer ? blackPlayer : whitePlayer}</div>
+                            <div>10:00</div>
+                        </div>
                         <div>
                             <Chessboard id="defaultBoard"
                                 position={game.fen()}
                                 onPieceDrop={onDrop}
                                 boardOrientation={color === "white" ? "white" : "black"}
                                 autoPromoteToQueen={true}
-                                boardWidth={500}
+                                boardWidth={boardWidth}
                             />
+                        </div>
+                        <div className="flex flex-row justify-between w-full">
+                            <div>{user} (You)</div>
+                            <div>10:00</div>
                         </div>
                         <button className="bg-black text-white p-2 mt-2 rounded-sm w-20" onClick={resign}>Resign</button>
                     </div>

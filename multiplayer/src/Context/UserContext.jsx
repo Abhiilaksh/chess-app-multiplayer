@@ -5,7 +5,7 @@ const UserContext = createContext();
 
 function Provider({ children }) {
     const [user, setUser] = useState(() => {
-        return sessionStorage.getItem('user') || null;
+        return localStorage.getItem('user') || null;
     });
 
     const [loading, setloading] = useState(true);
@@ -29,9 +29,7 @@ function Provider({ children }) {
 
     useEffect(() => {
         if (user) {
-            sessionStorage.setItem('user', user);
-        } else {
-            sessionStorage.removeItem('user');
+            localStorage.setItem('user', user);
         }
     }, [user]);
 

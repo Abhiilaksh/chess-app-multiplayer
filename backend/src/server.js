@@ -219,6 +219,15 @@ app.post('/RoomMessages', async (req, res) => {
     res.status(200).send(messages);
 })
 
+app.post('/userGames', async (req, res) => {
+    const { userId } = req.body;
+    const user = await User.findById(userId);
+    const whitegames = await Game.find({ white: user.name });
+    const blackgames = await Game.find({ white: user.name });
+    const merged = whitegames + blackgames;
+    res.status(200).send(merged);
+})
+
 
 
 server.listen(PORT, () => {
