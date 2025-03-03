@@ -21,7 +21,7 @@ function Login() {
         try {
             console.log("Entered user upper", EnteredUser);
             setLoginLoader(true);
-            const response = await axios.post(`http://localhost:8080/login`, {
+            const response = await axios.post(`http://localhost:8080/api/login`, {
                 name: EnteredUser,
                 email: EnteredEmail,
                 password: EnteredPassword,
