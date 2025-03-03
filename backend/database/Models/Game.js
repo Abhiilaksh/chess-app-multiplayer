@@ -12,6 +12,12 @@ const GameSchema = new mongoose.Schema({
     black: {
         type: String
     },
+    whiteName: {
+        type: String
+    },
+    blackName: {
+        type: String
+    },
     fen: [String],
     result: {
         type: String

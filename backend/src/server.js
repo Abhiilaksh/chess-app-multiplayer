@@ -11,6 +11,9 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 const nodemailer = require("nodemailer");
+const EloRank = require('elo-rank');
+const elo = new EloRank(32);
+const Auth = require("../middleware/Auth");
 
 const app = express();
 
@@ -72,8 +75,10 @@ io.on('connection', async (socket) => {
         const Player2 = await User.findOne({ name: userName });
         const roomName = uuidv4();
         const game = new Game({
-            white: Player1?.name,
-            black: Player2?.name,
+            white: Player1?._id,
+            black: Player2?._id,
+            whiteName: Player1?.name,
+            blackName: Player2?.name,
             roomName: roomName
         })
         await game.save();
@@ -83,8 +88,8 @@ io.on('connection', async (socket) => {
         console.log("room created", roomName);
         io.to(roomName).emit('room-name', {
             roomName,
-            white: game?.white,
-            black: game?.black
+            white: game?.whiteName,
+            black: game?.blackName,
         })
 
 
@@ -112,14 +117,22 @@ io.on('connection', async (socket) => {
         game.result = result;
         console.log(result);
         await game.save();
-        const whitePlayer = await User.findOne({ name: game.white });
-        const blackPlayer = await User.findOne({ name: game.black });
+        const whitePlayer = await User.findOne({ name: game.whiteName });
+        const blackPlayer = await User.findOne({ name: game.blackName });
+
+        const expectedScoreA = elo.getExpected(whitePlayer.elo, blackPlayer.elo);
+        const expectedScoreB = elo.getExpected(blackPlayer.elo, whitePlayer.elo);
+
         if (result.includes("White") || result.includes("white")) {
             whitePlayer.wins += 1;
+            whitePlayer.elo = elo.updateRating(expectedScoreA, 1, whitePlayer.elo);
             blackPlayer.loses += 1;
+            blackPlayer.elo = elo.updateRating(expectedScoreB, 0, blackPlayer.elo);
         } else if (result.includes("Black") || result.includes("black")) {
             whitePlayer.loses += 1;
+            whitePlayer.elo = elo.updateRating(expectedScoreA, 0, whitePlayer.elo);
             blackPlayer.wins += 1;
+            blackPlayer.elo = elo.updateRating(expectedScoreB, 1, blackPlayer.elo);
         } else {
             whitePlayer.draws += 1;
             blackPlayer.draws += 1;
@@ -136,18 +149,26 @@ io.on('connection', async (socket) => {
 
     socket.on('resign', async ({ roomName, user, color }) => {
         const game = await Game.findOne({ roomName: roomName });
-        const whitePlayer = await User.findOne({ name: game.white });
-        const blackPlayer = await User.findOne({ name: game.black });
+        const whitePlayer = await User.findOne({ name: game.whiteName });
+        const blackPlayer = await User.findOne({ name: game.blackName });
+
+        const expectedScoreA = elo.getExpected(whitePlayer.elo, blackPlayer.elo);
+        const expectedScoreB = elo.getExpected(blackPlayer.elo, whitePlayer.elo);
+
         game.result = `${color} resigned`;
         io.to(roomName).emit('game-end', {
             result: `${color} resigned !`
         })
         if (color == 'white' || color == 'White') {
             blackPlayer.wins += 1;
+            blackPlayer.elo = elo.updateRating(expectedScoreB, 1, blackPlayer.elo);
             whitePlayer.loses += 1;
+            whitePlayer.elo = elo.updateRating(expectedScoreA, 0, whitePlayer.elo);
         } else {
             blackPlayer.loses += 1;
+            blackPlayer.elo = elo.updateRating(expectedScoreB, 0, blackPlayer.elo);
             whitePlayer.wins += 1;
+            whitePlayer.elo = elo.updateRating(expectedScoreA, 1, whitePlayer.elo);
         }
 
         blackPlayer?.gamesHistory?.push(game._id);
@@ -303,8 +324,8 @@ app.get('/userGames/:id', async (req, res) => {
         const { id } = req.params;
         const user = await User.findById(id);
         if (!user) return res.status(400).send({ message: "Invalid user Id" });
-        const whitegames = await Game.find({ white: user.name });
-        const blackgames = await Game.find({ white: user.name });
+        const whitegames = await Game.find({ white: user._id });
+        const blackgames = await Game.find({ black: user._id });
         const merged = whitegames + blackgames;
         res.status(200).send(merged);
     } catch (err) {
@@ -319,6 +340,7 @@ app.get('/userStats/:id', async (req, res) => {
         if (!user) return res.status(400).send({ message: "User not found" });
         res.status(200).send({
             id: user._id,
+            elo: user.elo,
             name: user.name,
             wins: user.wins,
             loses: user.loses,
@@ -353,9 +375,11 @@ app.get("/game/:id", async (req, res) => {
     }
 })
 
-app.delete("/user/:id", async (req, res) => {
+app.delete("/user/:id", Auth, async (req, res) => {
     try {
+        const userId = req.userId;
         const { id } = req.params;
+        if (id != userId) return res.status(400).send("Access Denied");
         const user = await User.findByIdAndDelete(id);
         if (!user) return res.status(400).send("Invalid Id");
         res.status(200).send({
@@ -366,6 +390,36 @@ app.delete("/user/:id", async (req, res) => {
         res.status(400).send(err);
     }
 })
+
+app.get("/topPlayers", async (req, res) => {
+    const players = await User.find({}).sort({ elo: -1 }).limit(10);
+    let rank = 0;
+    const players_id = players.map((player) => ({
+        rank: ++rank,
+        id: player._id,
+        elo: player.elo,
+        name: player.name,
+    }));
+    res.status(200).send(players_id);
+})
+
+
+app.put("/updateUser/:id", Auth, async (req, res) => {
+    try {
+        const userId = req.userId;
+        const { id } = req.params;
+        if (id != userId) return res.status(400).send({ message: "Access Denied" });
+        const { name, email } = req.body;
+        const user = await User.findById(id);
+        if (name) user.name = name;
+        if (email) user.email = email;
+        await user.save();
+        res.status(200).send(user);
+    } catch (err) {
+        res.status(400).send(err);
+    }
+})
+
 
 server.listen(PORT, () => {
     console.log(`server is listening on ${PORT}`);
