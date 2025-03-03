@@ -1,3 +1,3 @@
 const mongoose = require('mongoose');
 
-mongoose.connect('mongodb+srv://aichess:aichess%4023%23@aichess.eoqfo.mongodb.net/chess-app');
+mongoose.connect('mongodb://localhost:27018/chess-app');

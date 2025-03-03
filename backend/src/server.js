@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require('express');
 const http = require('http');
 const socketio = require('socket.io');
@@ -9,6 +10,7 @@ const Message = require('../database/Models/Message');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
+const nodemailer = require("nodemailer");
 
 const app = express();
 
@@ -108,18 +110,50 @@ io.on('connection', async (socket) => {
     socket.on('game-over', async ({ roomName, result }) => {
         const game = await Game.findOne({ roomName: roomName });
         game.result = result;
+        console.log(result);
         await game.save();
+        const whitePlayer = await User.findOne({ name: game.white });
+        const blackPlayer = await User.findOne({ name: game.black });
+        if (result.includes("White") || result.includes("white")) {
+            whitePlayer.wins += 1;
+            blackPlayer.loses += 1;
+        } else if (result.includes("Black") || result.includes("black")) {
+            whitePlayer.loses += 1;
+            blackPlayer.wins += 1;
+        } else {
+            whitePlayer.draws += 1;
+            blackPlayer.draws += 1;
+        }
         io.to(roomName).emit('game-end', {
             result: result
         })
+
+        blackPlayer?.gamesHistory?.push(game._id);
+        whitePlayer?.gamesHistory?.push(game._id);
+        await blackPlayer.save();
+        await whitePlayer.save();
     });
 
     socket.on('resign', async ({ roomName, user, color }) => {
         const game = await Game.findOne({ roomName: roomName });
+        const whitePlayer = await User.findOne({ name: game.white });
+        const blackPlayer = await User.findOne({ name: game.black });
         game.result = `${color} resigned`;
         io.to(roomName).emit('game-end', {
             result: `${color} resigned !`
         })
+        if (color == 'white' || color == 'White') {
+            blackPlayer.wins += 1;
+            whitePlayer.loses += 1;
+        } else {
+            blackPlayer.loses += 1;
+            whitePlayer.wins += 1;
+        }
+
+        blackPlayer?.gamesHistory?.push(game._id);
+        whitePlayer?.gamesHistory?.push(game._id);
+        await blackPlayer.save();
+        await whitePlayer.save();
     })
 
     socket.on('stop-searching', ({ userName }) => {
@@ -168,7 +202,7 @@ app.post('/login', async (req, res) => {
     }
 });
 
-app.post('/signups', async (req, res) => {
+app.post('/signup', async (req, res) => {
     const { email, password, name } = req.body;
     try {
         const user = new User({ email, password, name });
@@ -180,15 +214,56 @@ app.post('/signups', async (req, res) => {
     }
 })
 
-app.post('/resetPassword', async (req, res) => {
+app.post('/resetPasswordToken', async (req, res) => {
     try {
-        const user = await User.findOne({ email: req.body.email });
+        const { email } = req.body;
+        const user = await User.findOne({ email: email });
         if (!user) return res.status(400).send({ error: 'Email is not registered with us' });
-        user.password = req.body.password;
-        await user.save();
-        res.status(200).send('success');
+        const token = jwt.sign({ user_id: user._id, email: user.email }, `tokenSecret`, { expiresIn: "5m" });
+        let transporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 465,
+            secure: true,
+            auth: {
+                user: "anmoltutejaserver@gmail.com",
+                pass: process.env.NODEMAIL_APP_PASSWORD,
+            },
+        });
+
+        let mailOptions = {
+            from: "anmoltutejaserver@gmail.com",
+            to: email,
+            subject: 'Password Reset Token',
+            text: `
+            Token is valid for only 5 minutes ${token}
+            `,
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                return res.status(400).send(error);
+            }
+            res.status(200).send("check mail box");
+        });
+
     } catch (e) {
         res.status(400).send(e);
+    }
+})
+
+app.patch("/resetPassword/:token", async (req, res) => {
+    try {
+        const { token } = req.params;
+        const { password } = req.body;
+        const decoded = jwt.verify(token, `tokenSecret`);
+        if (!decoded) res.status(400).send({ message: "Invalid Token" });
+        const user = await User.findById(decoded.user_id);
+        if (!user) return res.status(400).send({ message: "Invalid Token" });
+        user.password = password;
+        await user.save();
+        res.status(200).send("success");
+    } catch (err) {
+        res.status(400).send(err);
     }
 })
 
@@ -214,21 +289,83 @@ app.get('/checkWaitingQueue', async (req, res) => {
 })
 
 app.post('/RoomMessages', async (req, res) => {
-    const { roomName } = req.body;
-    const messages = await Message.find({ roomName: roomName }).sort({ timestamp: 1 });
-    res.status(200).send(messages);
+    try {
+        const { roomName } = req.body;
+        const messages = await Message.find({ roomName: roomName }).sort({ timestamp: 1 });
+        res.status(200).send(messages);
+    } catch (err) {
+        res.status(400).send(err);
+    }
 })
 
-app.post('/userGames', async (req, res) => {
-    const { userId } = req.body;
-    const user = await User.findById(userId);
-    const whitegames = await Game.find({ white: user.name });
-    const blackgames = await Game.find({ white: user.name });
-    const merged = whitegames + blackgames;
-    res.status(200).send(merged);
+app.get('/userGames/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id);
+        if (!user) return res.status(400).send({ message: "Invalid user Id" });
+        const whitegames = await Game.find({ white: user.name });
+        const blackgames = await Game.find({ white: user.name });
+        const merged = whitegames + blackgames;
+        res.status(200).send(merged);
+    } catch (err) {
+        res.status(400).send(err);
+    }
 })
 
+app.get('/userStats/:id', async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const user = await User.findById(userId);
+        if (!user) return res.status(400).send({ message: "User not found" });
+        res.status(200).send({
+            id: user._id,
+            name: user.name,
+            wins: user.wins,
+            loses: user.loses,
+            draws: user.draws,
+            gamesPlayed: user.gamesHistory
+        })
+    } catch (err) {
+        res.status(400).send(err);
+    }
 
+})
+
+app.get("/user/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id);
+        if (!user) return res.status(400).send({ message: "Invalid user ID" });
+        res.status(200).send(user);
+    } catch (err) {
+        res.status(500).send(err);
+    }
+})
+
+app.get("/game/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const game = await Game.findById(id);
+        if (!game) return res.status(400).send({ message: "Invalid game Id" });
+        res.status(200).send(game);
+    } catch (err) {
+        res.status(400).send(err);
+    }
+})
+
+app.delete("/user/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findByIdAndDelete(id);
+        if (!user) return res.status(400).send("Invalid Id");
+        res.status(200).send({
+            message: "User has been deleted",
+            user: user
+        });
+    } catch (err) {
+        res.status(400).send(err);
+    }
+})
 
 server.listen(PORT, () => {
     console.log(`server is listening on ${PORT}`);
