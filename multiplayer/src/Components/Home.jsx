@@ -5,10 +5,10 @@ import UserContext from "../Context/UserContext";
 function Home() {
     const navigate = useNavigate();
     const { user, setUser } = useContext(UserContext);
-    console.log(user);
+    console.log("Home", user);
 
     function logout() {
-        localStorage.removeItem("user");
+        //localStorage.removeItem("user");
         localStorage.removeItem("token");
         setUser("");
         navigate("/");

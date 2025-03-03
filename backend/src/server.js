@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require('express');
 const http = require('http');
 const socketio = require('socket.io');
@@ -6,9 +7,12 @@ require('../database/mongoose');
 const User = require('../database/Models/User');
 const Game = require('../database/Models/Game');
 const Message = require('../database/Models/Message');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
+const EloRank = require('elo-rank');
+const elo = new EloRank(32);
+
+const gameRoutes = require("../Routes/GameRoutes");
+const userRoutes = require("../Routes/UserRoutes");
 
 const app = express();
 
@@ -17,6 +21,9 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+
+app.use("/api", userRoutes);
+app.use("/api", gameRoutes);
 
 
 const PORT = process.env.PORT || 8080;
@@ -47,8 +54,8 @@ io.on('connection', async (socket) => {
         console.log(`Player as ${userName} Joined ${connectedToRoom} , white is ${game?.white} and black is ${game?.black}`);
         socket.emit('room-name', {
             roomName: connectedToRoom,
-            white: game?.white,
-            black: game?.black
+            white: game?.whiteName,
+            black: game?.blackName
         })
     }
 
@@ -70,8 +77,10 @@ io.on('connection', async (socket) => {
         const Player2 = await User.findOne({ name: userName });
         const roomName = uuidv4();
         const game = new Game({
-            white: Player1?.name,
-            black: Player2?.name,
+            white: Player1?._id,
+            black: Player2?._id,
+            whiteName: Player1?.name,
+            blackName: Player2?.name,
             roomName: roomName
         })
         await game.save();
@@ -81,8 +90,8 @@ io.on('connection', async (socket) => {
         console.log("room created", roomName);
         io.to(roomName).emit('room-name', {
             roomName,
-            white: game?.white,
-            black: game?.black
+            white: game?.whiteName,
+            black: game?.blackName,
         })
 
 
@@ -108,18 +117,66 @@ io.on('connection', async (socket) => {
     socket.on('game-over', async ({ roomName, result }) => {
         const game = await Game.findOne({ roomName: roomName });
         game.result = result;
+        console.log(result);
         await game.save();
+        const whitePlayer = await User.findOne({ name: game.whiteName });
+        const blackPlayer = await User.findOne({ name: game.blackName });
+
+        const expectedScoreA = elo.getExpected(whitePlayer.elo, blackPlayer.elo);
+        const expectedScoreB = elo.getExpected(blackPlayer.elo, whitePlayer.elo);
+
+        if (result.includes("White") || result.includes("white")) {
+            whitePlayer.wins += 1;
+            whitePlayer.elo = elo.updateRating(expectedScoreA, 1, whitePlayer.elo);
+            blackPlayer.loses += 1;
+            blackPlayer.elo = elo.updateRating(expectedScoreB, 0, blackPlayer.elo);
+        } else if (result.includes("Black") || result.includes("black")) {
+            whitePlayer.loses += 1;
+            whitePlayer.elo = elo.updateRating(expectedScoreA, 0, whitePlayer.elo);
+            blackPlayer.wins += 1;
+            blackPlayer.elo = elo.updateRating(expectedScoreB, 1, blackPlayer.elo);
+        } else {
+            whitePlayer.draws += 1;
+            blackPlayer.draws += 1;
+        }
         io.to(roomName).emit('game-end', {
             result: result
         })
+
+        blackPlayer?.gamesHistory?.push(game._id);
+        whitePlayer?.gamesHistory?.push(game._id);
+        await blackPlayer.save();
+        await whitePlayer.save();
     });
 
     socket.on('resign', async ({ roomName, user, color }) => {
         const game = await Game.findOne({ roomName: roomName });
+        const whitePlayer = await User.findOne({ name: game.whiteName });
+        const blackPlayer = await User.findOne({ name: game.blackName });
+
+        const expectedScoreA = elo.getExpected(whitePlayer.elo, blackPlayer.elo);
+        const expectedScoreB = elo.getExpected(blackPlayer.elo, whitePlayer.elo);
+
         game.result = `${color} resigned`;
         io.to(roomName).emit('game-end', {
             result: `${color} resigned !`
         })
+        if (color == 'white' || color == 'White') {
+            blackPlayer.wins += 1;
+            blackPlayer.elo = elo.updateRating(expectedScoreB, 1, blackPlayer.elo);
+            whitePlayer.loses += 1;
+            whitePlayer.elo = elo.updateRating(expectedScoreA, 0, whitePlayer.elo);
+        } else {
+            blackPlayer.loses += 1;
+            blackPlayer.elo = elo.updateRating(expectedScoreB, 0, blackPlayer.elo);
+            whitePlayer.wins += 1;
+            whitePlayer.elo = elo.updateRating(expectedScoreA, 1, whitePlayer.elo);
+        }
+
+        blackPlayer?.gamesHistory?.push(game._id);
+        whitePlayer?.gamesHistory?.push(game._id);
+        await blackPlayer.save();
+        await whitePlayer.save();
     })
 
     socket.on('stop-searching', ({ userName }) => {
@@ -149,77 +206,20 @@ io.on('connection', async (socket) => {
     })
 })
 
-app.post('/login', async (req, res) => {
-    const { email, password, name } = req.body;
-    try {
-        const user = await User.findOne({ email, name });
-        if (!user) {
-            return res.status(400).send({ error: "Invalid Credentials" });
-        }
-        const isPasswordMatch = await bcrypt.compare(password, user.password);
-        if (!isPasswordMatch) {
-            return res.status(400).send({ error: "Invalid Credentials" });
-        }
-
-        const token = jwt.sign({ user_id: user._id }, `tokenSecret`, { expiresIn: '30d' });
-        res.status(200).send({ token });
-    } catch (e) {
-        res.status(500).send({ error: e.message });
-    }
-});
-
-app.post('/signups', async (req, res) => {
-    const { email, password, name } = req.body;
-    try {
-        const user = new User({ email, password, name });
-        await user.save();
-        const token = jwt.sign({ user_id: user._id }, `tokenSecret`, { expiresIn: '30d' });
-        res.status(200).send({ token });
-    } catch (e) {
-        res.status(400).send({ error: e.message });
-    }
-})
-
-app.post('/resetPassword', async (req, res) => {
-    try {
-        const user = await User.findOne({ email: req.body.email });
-        if (!user) return res.status(400).send({ error: 'Email is not registered with us' });
-        user.password = req.body.password;
-        await user.save();
-        res.status(200).send('success');
-    } catch (e) {
-        res.status(400).send(e);
-    }
-})
-
-app.post('/verifytokenAndGetUsername', async (req, res) => {
-    const { token } = req.body;
-
-    try {
-        const decoded = jwt.verify(token, `tokenSecret`);
-        const user = await User.findById(decoded.user_id);
-
-        if (!user) {
-            return res.status(404).send({ error: 'Invalid or expired token' });
-        }
-
-        res.status(200).send({ user: user.name });
-    } catch (e) {
-        res.status(400).send({ error: 'Invalid or expired token' });
-    }
-});
 
 app.get('/checkWaitingQueue', async (req, res) => {
     res.status(200).send(waitingPlayers);
 })
 
 app.post('/RoomMessages', async (req, res) => {
-    const { roomName } = req.body;
-    const messages = await Message.find({ roomName: roomName }).sort({ timestamp: 1 });
-    res.status(200).send(messages);
+    try {
+        const { roomName } = req.body;
+        const messages = await Message.find({ roomName: roomName }).sort({ timestamp: 1 });
+        res.status(200).send(messages);
+    } catch (err) {
+        res.status(400).send(err);
+    }
 })
-
-
 
 server.listen(PORT, () => {
     console.log(`server is listening on ${PORT}`);

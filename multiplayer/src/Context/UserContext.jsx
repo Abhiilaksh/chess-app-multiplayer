@@ -4,21 +4,19 @@ import axios from "axios";
 const UserContext = createContext();
 
 function Provider({ children }) {
-    const [user, setUser] = useState(() => {
-        return sessionStorage.getItem('user') || null;
-    });
+    const [user, setUser] = useState(null);
 
     const [loading, setloading] = useState(true);
 
     async function decodeToken() {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.post(`http://localhost:8080/verifytokenAndGetUsername`, {
+            const response = await axios.post(`http://localhost:8080/api/verifytokenAndGetUsername`, {
                 token: token
             });
             if (response.status === 200) setUser(response.data.user);
         } catch (e) {
-            console.log(e)
+            console.log(e);
         }
         setloading(false);
     }
@@ -27,13 +25,6 @@ function Provider({ children }) {
         decodeToken();
     }, [])
 
-    useEffect(() => {
-        if (user) {
-            sessionStorage.setItem('user', user);
-        } else {
-            sessionStorage.removeItem('user');
-        }
-    }, [user]);
 
     return (
         <UserContext.Provider value={{ user, setUser, loading }}>

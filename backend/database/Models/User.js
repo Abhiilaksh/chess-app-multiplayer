@@ -53,6 +53,18 @@ const UserSchema = new mongoose.Schema({
     },
     currentSocket: {
         type: String
+    },
+    wins: {
+        type: Number,
+        default: 0
+    },
+    loses: {
+        type: Number,
+        default: 0
+    },
+    draws: {
+        type: Number,
+        default: 0
     }
 })
 
