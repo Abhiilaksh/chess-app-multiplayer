@@ -7,13 +7,12 @@ require('../database/mongoose');
 const User = require('../database/Models/User');
 const Game = require('../database/Models/Game');
 const Message = require('../database/Models/Message');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
-const nodemailer = require("nodemailer");
 const EloRank = require('elo-rank');
 const elo = new EloRank(32);
-const Auth = require("../middleware/Auth");
+
+const gameRoutes = require("../Routes/GameRoutes");
+const userRoutes = require("../Routes/UserRoutes");
 
 const app = express();
 
@@ -22,6 +21,9 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
+
+app.use("/api", userRoutes);
+app.use("/api", gameRoutes);
 
 
 const PORT = process.env.PORT || 8080;
@@ -52,8 +54,8 @@ io.on('connection', async (socket) => {
         console.log(`Player as ${userName} Joined ${connectedToRoom} , white is ${game?.white} and black is ${game?.black}`);
         socket.emit('room-name', {
             roomName: connectedToRoom,
-            white: game?.white,
-            black: game?.black
+            white: game?.whiteName,
+            black: game?.blackName
         })
     }
 
@@ -204,106 +206,6 @@ io.on('connection', async (socket) => {
     })
 })
 
-app.post('/login', async (req, res) => {
-    const { email, password, name } = req.body;
-    try {
-        const user = await User.findOne({ email, name });
-        if (!user) {
-            return res.status(400).send({ error: "Invalid Credentials" });
-        }
-        const isPasswordMatch = await bcrypt.compare(password, user.password);
-        if (!isPasswordMatch) {
-            return res.status(400).send({ error: "Invalid Credentials" });
-        }
-
-        const token = jwt.sign({ user_id: user._id }, `tokenSecret`, { expiresIn: '30d' });
-        res.status(200).send({ token });
-    } catch (e) {
-        res.status(500).send({ error: e.message });
-    }
-});
-
-app.post('/signup', async (req, res) => {
-    const { email, password, name } = req.body;
-    try {
-        const user = new User({ email, password, name });
-        await user.save();
-        const token = jwt.sign({ user_id: user._id }, `tokenSecret`, { expiresIn: '30d' });
-        res.status(200).send({ token });
-    } catch (e) {
-        res.status(400).send({ error: e.message });
-    }
-})
-
-app.post('/resetPasswordToken', async (req, res) => {
-    try {
-        const { email } = req.body;
-        const user = await User.findOne({ email: email });
-        if (!user) return res.status(400).send({ error: 'Email is not registered with us' });
-        const token = jwt.sign({ user_id: user._id, email: user.email }, `tokenSecret`, { expiresIn: "5m" });
-        let transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 465,
-            secure: true,
-            auth: {
-                user: "anmoltutejaserver@gmail.com",
-                pass: process.env.NODEMAIL_APP_PASSWORD,
-            },
-        });
-
-        let mailOptions = {
-            from: "anmoltutejaserver@gmail.com",
-            to: email,
-            subject: 'Password Reset Token',
-            text: `
-            Token is valid for only 5 minutes ${token}
-            `,
-        };
-
-        transporter.sendMail(mailOptions, (error, info) => {
-            if (error) {
-                return res.status(400).send(error);
-            }
-            res.status(200).send("check mail box");
-        });
-
-    } catch (e) {
-        res.status(400).send(e);
-    }
-})
-
-app.patch("/resetPassword/:token", async (req, res) => {
-    try {
-        const { token } = req.params;
-        const { password } = req.body;
-        const decoded = jwt.verify(token, `tokenSecret`);
-        if (!decoded) res.status(400).send({ message: "Invalid Token" });
-        const user = await User.findById(decoded.user_id);
-        if (!user) return res.status(400).send({ message: "Invalid Token" });
-        user.password = password;
-        await user.save();
-        res.status(200).send("success");
-    } catch (err) {
-        res.status(400).send(err);
-    }
-})
-
-app.post('/verifytokenAndGetUsername', async (req, res) => {
-    const { token } = req.body;
-
-    try {
-        const decoded = jwt.verify(token, `tokenSecret`);
-        const user = await User.findById(decoded.user_id);
-
-        if (!user) {
-            return res.status(404).send({ error: 'Invalid or expired token' });
-        }
-
-        res.status(200).send({ user: user.name });
-    } catch (e) {
-        res.status(400).send({ error: 'Invalid or expired token' });
-    }
-});
 
 app.get('/checkWaitingQueue', async (req, res) => {
     res.status(200).send(waitingPlayers);
@@ -318,108 +220,6 @@ app.post('/RoomMessages', async (req, res) => {
         res.status(400).send(err);
     }
 })
-
-app.get('/userGames/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const user = await User.findById(id);
-        if (!user) return res.status(400).send({ message: "Invalid user Id" });
-        const whitegames = await Game.find({ white: user._id });
-        const blackgames = await Game.find({ black: user._id });
-        const merged = whitegames + blackgames;
-        res.status(200).send(merged);
-    } catch (err) {
-        res.status(400).send(err);
-    }
-})
-
-app.get('/userStats/:id', async (req, res) => {
-    try {
-        const userId = req.params.id;
-        const user = await User.findById(userId);
-        if (!user) return res.status(400).send({ message: "User not found" });
-        res.status(200).send({
-            id: user._id,
-            elo: user.elo,
-            name: user.name,
-            wins: user.wins,
-            loses: user.loses,
-            draws: user.draws,
-            gamesPlayed: user.gamesHistory
-        })
-    } catch (err) {
-        res.status(400).send(err);
-    }
-
-})
-
-app.get("/user/:id", async (req, res) => {
-    try {
-        const { id } = req.params;
-        const user = await User.findById(id);
-        if (!user) return res.status(400).send({ message: "Invalid user ID" });
-        res.status(200).send(user);
-    } catch (err) {
-        res.status(500).send(err);
-    }
-})
-
-app.get("/game/:id", async (req, res) => {
-    try {
-        const { id } = req.params;
-        const game = await Game.findById(id);
-        if (!game) return res.status(400).send({ message: "Invalid game Id" });
-        res.status(200).send(game);
-    } catch (err) {
-        res.status(400).send(err);
-    }
-})
-
-app.delete("/user/:id", Auth, async (req, res) => {
-    try {
-        const userId = req.userId;
-        const { id } = req.params;
-        if (id != userId) return res.status(400).send("Access Denied");
-        const user = await User.findByIdAndDelete(id);
-        if (!user) return res.status(400).send("Invalid Id");
-        res.status(200).send({
-            message: "User has been deleted",
-            user: user
-        });
-    } catch (err) {
-        res.status(400).send(err);
-    }
-})
-
-app.get("/topPlayers", async (req, res) => {
-    const players = await User.find({}).sort({ elo: -1 }).limit(10);
-    let rank = 0;
-    const players_id = players.map((player) => ({
-        rank: ++rank,
-        id: player._id,
-        elo: player.elo,
-        name: player.name,
-    }));
-    res.status(200).send(players_id);
-})
-
-
-app.put("/updateUser/:id", Auth, async (req, res) => {
-    try {
-        const userId = req.userId;
-        const { id } = req.params;
-        if (id != userId) return res.status(400).send({ message: "Access Denied" });
-        const { name, email } = req.body;
-        const user = await User.findById(id);
-        if (name) user.name = name;
-        if (email) user.email = email;
-        await user.save();
-        res.status(200).send(user);
-    } catch (err) {
-        res.status(400).send(err);
-    }
-})
-
 
 server.listen(PORT, () => {
     console.log(`server is listening on ${PORT}`);

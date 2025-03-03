@@ -10,7 +10,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "axios": "^1.8.1",
     "bcrypt": "^5.1.1",
+    "chess.js": "^1.1.0",
+    "chessops": "github:lichess-org/chessops",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "elo-rank": "^1.0.4",
