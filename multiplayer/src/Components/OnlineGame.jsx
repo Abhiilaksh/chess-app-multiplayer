@@ -37,6 +37,10 @@ function OnlineGame() {
     const [movesHistory, setMovesHistory] = useState([]);
     const [quote, setQuote] = useState("");
     const [boardWidth, setBoardWidth] = useState(window.innerWidth * 0.4);
+    const [fens, setFens] = useState([]);
+    const [showfens, setShowfens] = useState(true);
+    const [pgns, setPgns] = useState([]);
+    const [showPng, setShowPng] = useState(false);
 
     useEffect(() => {
         const handleResize = () => {
@@ -77,9 +81,11 @@ function OnlineGame() {
             setBlackPlayer(black);
         });
 
-        socket.on('move-update', ({ fen }) => {
+        socket.on('move-update', ({ fen, pgn }) => {
             setGame(new Chess(fen));
             sessionStorage.setItem('online-game', fen);
+            setFens(prevFens => [...prevFens, fen]);
+            setPgns(prevPgn => [...prevPgn, pgn]);
         });
 
         socket.on('game-end', ({ result }) => {
@@ -105,7 +111,8 @@ function OnlineGame() {
                     roomName: RoomName,
                     playedBy: user,
                     color: color,
-                    move: game.history()
+                    move: game.history(),
+                    pgn: game.pgn()
                 });
 
                 setGame(new Chess(game.fen()));
@@ -124,6 +131,8 @@ function OnlineGame() {
                 }
 
                 sessionStorage.setItem("game", game.fen());
+                setFens(prevFens => [...prevFens, game.fen()]);
+                setPgns(prevPgn => [...prevPgn, game.pgn()]);
             }
         }
     };
@@ -160,7 +169,18 @@ function OnlineGame() {
         });
     }, [])
 
+    async function getRoomFensAndPng() {
+        try {
+            const res = await axios.get(`http://localhost:8080/api/currentfensAndpng/${RoomName}`);
+            setFens(res.data.fen);
+            setPgns(res.data.pgn);
+        } catch (err) {
+            console.log(err);
+        }
+    }
+
     useEffect(() => {
+        getRoomFensAndPng();
         getRoomMessages();
     }, [])
 
@@ -192,33 +212,56 @@ function OnlineGame() {
         }
     }
 
+    const renderFens = fens.map((fen, index) => {
+        return <p className="text-gray-600" key={index}>{fen}</p>
+    })
+
+    const renderPngs = pgns.map((pgn, index) => {
+        return <p className="text-gray-600" key={index}>{pgn}</p>
+    })
+
     const renderMessages = messages.map((msg, index) => {
-        return (<div key={index}>
-            <p className={`font-bold ${msg.user === user ? 'text-green-600' : 'text-orange-500'}`} >{msg.user}</p>
+        return (<div key={index} className=" rounded-sm">
+            <p className={` ${msg.user === user ? 'text-green-600' : 'text-orange-500'}`} >{msg.user}</p>
             <div className="flex flex-col">
-                <div className="text-sm text-gray-200">{msg.timestamp}</div>
-                <div>{msg.text}</div>
+                <div className="text-xs text-gray-600">{msg.timestamp}</div>
+                <div className="text-black bg-[#f8f7f7] rounded-md p-1 px-2">{msg.text}</div>
             </div>
         </div>)
     })
 
+
+    function toggleToFen() {
+        setShowPng(false);
+        setShowfens(true);
+    }
+
+    function toggleToPgn() {
+        setShowfens(false);
+        setShowPng(true);
+    }
+
     return (
         <div>
             {RoomName &&
-                <div className="flex items-center justify-around">
-                    <div className="bg-[#262422] w-[28%] flex flex-col p-4 text-white">
-                        <p className="text-xl">Chat Room</p>
+                <div className="flex items-center justify-around bg-[#121212] h-[100vh]">
+                    <div className="bg-[#F3F4F6] w-[28%] flex flex-col p-4 text-white">
+                        <p className="text-xl text-black font-semibold border-b-2 pb-2">Chat Room</p>
                         <ScrollToBottom className="h-[400px] overflow-x-auto whitespace-normal p-2">
-                            {renderMessages}
+                            <div className="flex gap-4 flex-col">
+                                {renderMessages}
+                            </div>
                         </ScrollToBottom>
-                        <input className="outline-none bg-[#403e3b] p-1 relative bottom-0"
+                        <input className="outline-none bg-[#ebeaea] p-1 relative bottom-0 text-black"
                             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                             onChange={(e) => setMessage(e.target.value)}
                             value={message}
+                            placeholder="Type To Chat"
+
                         ></input>
                     </div>
                     <div className="flex justify-center flex-col items-center mt-10">
-                        <div className="flex flex-row justify-between w-full">
+                        <div className="flex flex-row justify-between w-full text-white">
                             <div>{user === whitePlayer ? blackPlayer : whitePlayer}</div>
                             <div>10:00</div>
                         </div>
@@ -229,34 +272,50 @@ function OnlineGame() {
                                 boardOrientation={color === "white" ? "white" : "black"}
                                 autoPromoteToQueen={true}
                                 boardWidth={boardWidth}
+                                customDarkSquareStyle={{
+                                    backgroundColor: "#888c94",
+                                }}
+                                customLightSquareStyle={{
+                                    backgroundColor: "#f0ecec",
+                                }}
                             />
                         </div>
-                        <div className="flex flex-row justify-between w-full">
+                        <div className="flex flex-row justify-between w-full text-white">
                             <div>{user} (You)</div>
                             <div>10:00</div>
                         </div>
-                        <button className="bg-black text-white p-2 mt-2 rounded-sm w-20" onClick={resign}>Resign</button>
+                        <button className="bg-red-500 text-white p-2 mt-2 rounded-sm w-20" onClick={resign}>Resign</button>
                     </div>
 
-                    <div className="bg-[#262422] w-[25%] h-[400px] p-4 text-white relative">
-                        <div></div>
-                        <div className="bg-[#484746] rounded-sm w-[90%] break-words p-1 absolute bottom-2">
-                            {game.fen()}
+                    <div className="bg-[#F3F4F6] w-[25%] h-[400px] p-4 text-white relative break-words">
+                        <div className="flex flex-row justify-center gap-2">
+                            <div className={`${showfens ? `bg-blue-600` : `bg-blue-500`}  pl-2 pr-2 pt-1 pb-1 rounded-sm cursor-pointer`} onClick={toggleToFen}>fen</div>
+                            <div className={`${showPng ? `bg-blue-600` : `bg-blue-500`} pl-2 pr-2 pt-1 pb-1 rounded-sm cursor-pointer`} onClick={toggleToPgn}>pgn</div>
                         </div>
+                        <ScrollToBottom className="h-[350px] whitespace-normal p-2">
+                            {showfens && <div className="flex gap-4 flex-col">
+                                {renderFens}
+                            </div>
+                            }
+                            {showPng && <div className="flex gap-4 flex-col">
+                                {renderPngs}
+                            </div>
+                            }
+                        </ScrollToBottom>
                     </div>
 
                 </div>
             }
             {
                 !RoomName &&
-                <div className="flex justify-center mt-[20%] items-center flex-col gap-2">
-                    <div>{quote}</div>
+                <div className="flex justify-center items-center flex-col gap-2 bg-[#121212] h-[100vh]">
+                    <div className="text-white">{quote}</div>
                     <BarLoader
                         size={150}
                         aria-label="Loading Spinner"
                         data-testid="loader"
                     />
-                    <button onClick={stopSearchingBtnClicked} className="bg-black text-white rounded-md p-2">stop searching</button>
+                    <button onClick={stopSearchingBtnClicked} className="bg-white text-black rounded-sm p-2">stop searching</button>
                 </div>
             }
 

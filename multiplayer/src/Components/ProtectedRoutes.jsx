@@ -15,7 +15,6 @@ const ProtectedRoute = ({ children }) => {
     if (loading) {
         return <h1>Loading...</h1>;
     }
-
     return user ? children : null;
 };
 

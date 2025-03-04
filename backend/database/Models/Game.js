@@ -25,7 +25,8 @@ const GameSchema = new mongoose.Schema({
     moves: [Object],
     roomName: {
         type: String
-    }
+    },
+    pgn: [String]
 })
 
 const Game = mongoose.model('Game', GameSchema);

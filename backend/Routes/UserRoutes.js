@@ -38,6 +38,23 @@ router.post('/signup', async (req, res) => {
     }
 })
 
+router.post('/verifytokenAndGetUsername', async (req, res) => {
+    const { token } = req.body;
+
+    try {
+        const decoded = jwt.verify(token, `tokenSecret`);
+        const user = await User.findById(decoded.user_id);
+
+        if (!user) {
+            return res.status(404).send({ error: 'Invalid or expired token' });
+        }
+
+        res.status(200).send({ user: user.name });
+    } catch (e) {
+        res.status(400).send({ error: 'Invalid or expired token' });
+    }
+});
+
 router.post('/resetPasswordToken', async (req, res) => {
     try {
         const { email } = req.body;
@@ -90,23 +107,6 @@ router.patch("/resetPassword/:token", async (req, res) => {
         res.status(400).send(err);
     }
 })
-
-router.post('/verifytokenAndGetUsername', async (req, res) => {
-    const { token } = req.body;
-
-    try {
-        const decoded = jwt.verify(token, `tokenSecret`);
-        const user = await User.findById(decoded.user_id);
-
-        if (!user) {
-            return res.status(404).send({ error: 'Invalid or expired token' });
-        }
-
-        res.status(200).send({ user: user.name });
-    } catch (e) {
-        res.status(400).send({ error: 'Invalid or expired token' });
-    }
-});
 
 router.get('/userGames/:id', async (req, res) => {
     try {
@@ -185,4 +185,67 @@ router.put("/updateUser/:id", Auth, async (req, res) => {
     }
 })
 
+router.get("/verifyToken/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id);
+        if (!user) return res.status(400).send({ message: "Invalid user ID" });
+        const token = jwt.sign({ user_id: user._id, email: user.email }, `tokenSecret`, { expiresIn: "5m" });
+        let transporter = nodemailer.createTransport({
+            host: 'smtp.gmail.com',
+            port: 465,
+            secure: true,
+            auth: {
+                user: "anmoltutejaserver@gmail.com",
+                pass: process.env.NODEMAIL_APP_PASSWORD,
+            },
+        });
+
+        let mailOptions = {
+            from: "anmoltutejaserver@gmail.com",
+            to: user.email,
+            subject: 'Email Verification Link',
+            text: `
+            Token is valid for only 5 minutes ${token}
+            `,
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                return res.status(400).send(error);
+            }
+            res.status(200).send("check mail box");
+        });
+    } catch (err) {
+        res.status(400).send(err.message);
+    }
+})
+
+router.get("/verify/:token", async (req, res) => {
+    try {
+        const { token } = req.params;
+        const decoded = jwt.verify(token, `tokenSecret`);
+        if (!decoded) res.status(400).send({ message: "Invalid Token" });
+        const user = await User.findById(decoded.user_id);
+        if (!user) return res.status(400).send({ message: "Invalid Token" });
+        user.isVerified = true;
+        await user.save();
+        res.status(200).send({ message: "User has been verified" });
+    } catch (err) {
+        res.status(400).send(err);
+    }
+})
+
+router.post("/isVerified", async (req, res) => {
+    try {
+        const { name } = req.body;
+        const user = await User.findOne({ name: name });
+        if (!user) return res.status(400).send({ message: "Invalid User" });
+        res.status(200).send({
+            verified: user.isVerified
+        })
+    } catch (err) {
+        res.status(400).send(err);
+    }
+})
 module.exports = router;

@@ -103,12 +103,13 @@ io.on('connection', async (socket) => {
     }
 
 
-    socket.on('move-played', async ({ fen, roomName, playedBy, color, move }) => {
+    socket.on('move-played', async ({ fen, roomName, playedBy, color, move, pgn }) => {
         console.log("New Move : to room ", roomName);
-        socket.to(roomName).emit('move-update', { fen });
+        socket.to(roomName).emit('move-update', { fen, pgn });
         const game = await Game.findOne({ roomName: roomName });
         if (game) {
             game.fen.push(fen);
+            game.pgn.push(pgn);
             game.moves.push({ move, color });
             await game.save();
         }

@@ -27,4 +27,19 @@ router.get("/topPlayers", async (req, res) => {
     res.status(200).send(players_id);
 })
 
+router.get("/currentfensAndpng/:roomId", async (req, res) => {
+    try {
+        const { roomId } = req.params;
+        const game = await Game.findOne({ roomName: roomId });
+        if (!game) res.status(400).send({ message: "Invalid room Id" });
+        res.status(200).send({
+            fen: game.fen,
+            pgn: game.pgn,
+        });
+    } catch (err) {
+        res.status(400).send(err);
+    }
+})
+
+
 module.exports = router;

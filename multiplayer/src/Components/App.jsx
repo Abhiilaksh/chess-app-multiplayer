@@ -20,9 +20,9 @@ function App() {
               <Home />
             </ProtectedRoute>
           }></Route>
-          <Route path="/localgame" element={
+          <Route path="/localgame/:gameId" element={
             <ProtectedRoute><LocalGame /></ProtectedRoute>
-          }></Route>
+          } />
           <Route path="/game" element={
             <ProtectedRoute><OnlineGame /></ProtectedRoute>
           }></Route>

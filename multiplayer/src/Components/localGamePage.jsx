@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from 'react-hot-toast';
+import { v4 as uuidv4 } from 'uuid';
 
 function LocalGamePage() {
     const [player1, setPlayer1] = useState("");
@@ -13,18 +14,37 @@ function LocalGamePage() {
             return;
         }
         sessionStorage.removeItem("localgame");
-        navigate("/localgame", { state: { player1, player2 } });
+        const gameId = uuidv4();
+        navigate(`/localgame/${gameId}`, { state: { player1, player2 } });
     }
 
 
     return (
-        <div>
-            <div className="flex flex-col gap-2 items-center mt-20">
-                <div className="flex flex-col gap-1">
-                    <input placeholder="Enter White Player name" onChange={(e) => setPlayer1(e.target.value)} className="p-2 w-52 bg-[#F6F6F6]  outline-none rounded-sm"></input>
-                    <input placeholder="Enter Black Player name" onChange={(e) => setPlayer2(e.target.value)} className="p-2 w-52 bg-[#F6F6F6]  outline-none rounded-sm"></input>
+        <div className="h-screen flex items-center justify-center bg-[#121212]">
+            <div className="flex flex-col gap-4 p-6 bg-[#F3F4F6] rounded-sm shadow-lg">
+                <h2 className="text-lg font-semibold text-gray-800 text-center">Enter Player Names</h2>
+
+                <div className="flex flex-col gap-3">
+                    <input
+                        placeholder="Enter White Player name"
+                        onChange={(e) => setPlayer1(e.target.value)}
+                        className="p-3 w-64 bg-[#F6F6F6] border border-gray-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                    <input
+                        placeholder="Enter Black Player name"
+                        onChange={(e) => setPlayer2(e.target.value)}
+                        className="p-3 w-64 bg-[#F6F6F6] border border-gray-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    />
                 </div>
-                <button onClick={startLocalGame} className="w-20 bg-black text-white rounded-md p-2">Start</button>
+
+                <div className="flex justify-center">
+                    <button
+                        onClick={startLocalGame}
+                        className="w-32 bg-[#3982F6] text-white rounded-sm p-3 font-medium"
+                    >
+                        Start
+                    </button>
+                </div>
             </div>
         </div>
     )
